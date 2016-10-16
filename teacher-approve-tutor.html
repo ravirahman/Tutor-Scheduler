@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+        .schedule {
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: 0.5 0.5;
+        }
+        .schedule-table {
+            width: 100%;
+        }
+        b {
+            color: <?= accentColor ?>;
+        }
+    </style>
+
+    <script>
+
+        function processForm() {
+            //first things first: validate responses
+            //times: should have a value
+            console.log("processing");
+            var off_payment_method = document.getElementsByName('approvalStatus');
+            var ischecked_method = false;
+            for ( var i = 0; i < off_payment_method.length; i++) {
+                if(off_payment_method[i].checked) {
+                    ischecked_method = true;
+                    break;
+                }
+            }
+            if (!ischecked_method) {
+                alert("Please select wheter or not this student should be approved to tutor.");
+                return false;
+            }
+
+            var submit = document.getElementById("submit");
+            submit.value = "Please Wait...";
+            submit.disabled = true;
+            google.script.run.withFailureHandler(function(response){
+                console.log(response);
+                alert("There was an error. Please try again.");
+            }).withSuccessHandler(function(response) {
+                if (!response.success) {
+
+                    submit.value = "Send Recommendation";
+                    submit.disabled = false;
+                    return alert(response.message);
+                }
+                alert("Recommendation Sent. Thank you!");
+                submit.style.display = "none";
+                document.getElementById("homeLinkFooter").style.display = "block";
+            }).teacherApproveTutor(document.getElementById("form"));
+            return false;
+        }
+    </script>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12">
+                    <h1>Tutor Recommendation</h1>
+                    <a href="<?= baseAppUrl ?>?page=home" id="homeLink">Back to home</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-12">
+                    <? if (!isLoggedIn()) { ?>
+                    <p>Please <a href="<?= signInLink ?>">sign in</a> using your <?= orgAccountName ?> account to view this page.</p>
+                    <? }
+           else {
+          ?>
+
+                    <p>
+                        Hi <?= getFirstName() ?> <?= getLastName() ?>,</p>
+                    <?
+              var requestId = parseInt(params.requestId);
+              var tutorEmail = Session.getActiveUser().getEmail();
+              var tutorSheet = SpreadsheetApp.openById(sheetId);
+              var pairingAssignments = tutorSheet.getSheetByName("TutorClassHistory");
+              var range = pairingAssignments.getDataRange();
+              var rangeArray = range.getValues();
+              
+              var row = rangeArray[requestId-1];
+              var studentName = getFirstName(row[0]) + " " + getLastName(row[0]);
+              
+              
+              if (row[5].toLowerCase() != tutorEmail.toLowerCase()) {?>
+                    <p>However, you are not the specified teacher. Sorry!</p>
+                    <?
+              }
+              
+              else if (row[8] === true || row[8] === false) {
+                ?>
+                    <p>However, you have already submitted your recommendation. Thanks anyways!</p>
+                    <?
+              }
+              else { ?>
+
+                    <p>Your student <b><?= studentName ?></b> would like to be a tutor in <b><?= row[4] ?></b>.</p>
+                    <form id="form" onsubmit="return processForm();">
+                        <p>Is <?=studentName ?> qualified to tutor in this subject?</p>
+                        <p>
+                            <input type="radio" value="true" name="approvalStatus" id="yes"><label for="yes" style="margin-left: 10px;">Yes</label><br />
+                            <input type="radio" value="false" name="approvalStatus" id="no"><label for="no"  style="margin-left: 10px;">No</label><br />
+                            <textarea name="notes" placeholder="Additional Notes for TutorMilton (Optional and Confidential)" rows=5 cols=50></textarea><br />
+
+                            <input type="hidden" name="id" value="<?= requestId ?>" />
+                            <input type="hidden" name="userEmail" value="<?= email ?>">
+                            <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+                        <p><input type="submit" value="Send Recommendation" id="submit" />
+                            <a href="<?= baseAppUrl ?>?page=home" id="homeLinkFooter" style="display: none;">Back to home</a></p>
+                    </form>
+                    <?
+              }
+              }
+              ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+
+
+    </style>
+
+    <script>
+
+        function cancelCommitment(pairId,tutorName) {
+            if (tutorName) {
+                var message = "Are you sure? If so, we'll send an email to the tutor, " + tutorName + ".";
+            }
+            else {
+                var message = "Are you sure you want to cancel this request?";
+            }
+            var lg = confirm(message);
+            if (lg) {
+                var submit = document.getElementById("cancelCommitmentSubmit" + pairId);
+                submit.value = "Please Wait...";
+                submit.disabled = true;
+
+                google.script.run.withFailureHandler(function(response){
+                    console.log(response);
+                    submit.value = "Free me from this commitment";
+                    submit.disabled = false;
+                    alert("There was an error. Please try again.");
+                }).withSuccessHandler(function(response) {
+                    if (!response.success) {
+                        submit.value = "Cancel this commitment";
+                        submit.disabled = false;
+                        return alert(response.message);
+                    }
+                    alert("This commitment has been canceled. Thank you!");
+                    submit.style.display = "none";
+                }).studentCancelCommitment(document.getElementById("cancelCommitment" + pairId));
+            }
+            return false;
+
+        }
+    </script>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12">
+                    <h1>Manage your Tutoring Commitments</h1>
+                    <a href="<?= baseAppUrl ?>?page=home" id="homeLink">Back to home</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-12">
+                    <? if (!isLoggedIn()) { ?>
+                    <p>Please <a href="<?= signInLink ?>">sign in</a> using your <?= orgAccountName ?> account to view this page.</p>
+                    <? }
+           else {
+                ?>
+                    <p>
+                        Hi <?= getFirstName() ?> <?= getLastName() ?>,</p>
+                    <?
+                        var studentEmail = email;
+                        var tutorSheet = SpreadsheetApp.openById(sheetId);
+                        var pairingAssignments = tutorSheet.getSheetByName("PairingAssignments");
+                        var range = pairingAssignments.getDataRange();
+                        var rangeArray = range.getValues();
+                        var commitments = {
+                        pending: [],
+                        active: [],
+                        past: []
+                        };
+                        rangeArray.shift();
+                        for (var i = 0; i < rangeArray.length; i++) {
+                        var row = rangeArray[i];
+                        if (row[2] == studentEmail) {
+                            Logger.log(row[16] + " is row 16");
+                            if (row[16] == true) {//is active
+                                commitments.active.push(row);
+                            }
+                            else if (!row[13] && row[16] !== false) { //is pending
+                                commitments.pending.push(row);
+                            }
+                            else { //is in the past
+                                commitments.past.push(row);
+                            }
+                        }
+                    }
+                    if (commitments.active.length + commitments.past.length + commitments.pending.length == 0) {
+                        ?>
+                    <p>Unfortunately, it seems that you haven't requested a tutor. Want a tutor? <a href="<?= baseAppUrl ?>?page=student-new-request">head over here</a>.</p>
+                    <?
+                    }
+                    else { ?>
+                    <p>Here are your tutoring commitments:</p>
+                    <?
+                        //let's go look up the phone numbers in one shreadsheet api
+                        var tutorList = tutorSheet.getSheetByName("TutorList");
+                        var range1 = tutorList.getDataRange();
+                        var rangeValues = range1.getValues();
+                        //let's convert it into an object of email:phone#
+                        var tutorPhoneNumbers = {};
+                        for (var i = 1; i < rangeValues.length; i++) {
+                            var row2 = rangeValues[i];
+                            //row[0] = email; row[1] = phone; row[2] = json of available slots; row[3] = json of occupied slots
+                            tutorPhoneNumbers[row2[0]] = row2[1];
+                        }
+
+                            for (var type in commitments) {
+                            if (commitments.hasOwnProperty(type)) {
+                            if (commitments[type].length > 0) { ?>
+                    <h2 style="text-transform: capitalize;"><?= type ?></h2>
+                    <table border="1" style="background-color: #111;">
+                        <tr>
+                            <? if (type != "pending") { ?><th>Tutor</th><? }?>
+                            <th>Subject</th>
+                            <th>Course</th>
+                            <th>Teacher</th>
+                            <th>Duration</th>
+                            <? if (type != "pending") { ?><th>Meeting Time and Place</th><? }?>
+                            <th>Actions and Notes</th>
+                        </tr>
+                        <?
+                            commitments[type].forEach(function(commitment) {
+                            var duration = commitment[10];
+                            var durationName = getDurationName(duration);
+                            var tutorEmail = commitment[13];
+                            //go look up the phone on the tutorlist
+
+
+                            ?>
+                        <tr>
+                            <? if (type != "pending") { ?>
+                            <td><!-- student info -->
+                                <?
+                            if (!tutorEmail) { ?>
+                                N/A
+                                <? } else { ?>
+                                <?= getFirstName(tutorEmail) ?> <?= getLastName(tutorEmail) ?><br />
+                                <a href="mailto:<?= tutorEmail ?>"><?= tutorEmail ?></a><br />
+                                <?= formatPhone(tutorPhoneNumbers[tutorEmail]); ?>
+                                <? } ?>
+                            </td>
+                            <? } ?>
+                            <td><!-- subject -->
+                                <?= commitment[4] ?>
+                            </td>
+                            <td><!-- course -->
+                                <?= commitment[7] ?>
+                            </td>
+                            <td><!-- teacher -->
+                                <a href="mailto:<?=commitment[8]?>"><?= getFirstName(commitment[8]) ?> <?= getLastName(commitment[8]) ?></a>
+                            </td>
+                            <td><!-- duration -->
+                                <?= durationName ?>
+                            </td>
+                            <? if (type != "pending") { ?><td><!-- meeting time and place -->
+                            <?
+                            if (!tutorEmail) { ?>
+                            N/A
+                            <? } else {
+                            var time = commitment[14];
+                            var day = time.substring(0,3);
+                            var period = time.substring(3,5);
+                            var location = JSON.parse(commitment[9])[time];?>
+                            <?=   getDayName(day) ?><br />
+                            <?=  getPeriodName(period) ?><br />
+                            <?= getLocationName(location) ?>
+                            <? } ?>
+                        </td><? } ?>
+                            <td><!-- actions -->
+                                <ul>
+
+                                    <?
+                            if (type == "pending") { ?>
+                                    <li>
+                                        <form onSubmit="return cancelCommitment(<?= commitment[0] ?>)"
+                                              id="cancelCommitment<?= commitment[0] ?>">
+                                            <input type="hidden" name="userEmail" value="<?= email ?>">
+                                            <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+                                            <input type="hidden" name="pairId" value="<?= commitment[0] ?>">
+                                            <input type="submit" class="actionLink" id="cancelCommitmentSubmit<?= commitment[0] ?>" value="Cancel this request">
+                                        </form>
+                                    </li>
+                                    <? } else if (commitment[16] != false) { ?>
+                                    <li>
+                                        <form onSubmit="return cancelCommitment(<?= commitment[0] ?>,<?= getFirstName(tutorEmail) ?>)"
+                                              id="cancelCommitment<?= commitment[0] ?>">
+                                            <input type="hidden" name="userEmail" value="<?= email ?>">
+                                            <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+                                            <input type="hidden" name="pairId" value="<?= commitment[0] ?>">
+                                            <input type="submit" class="actionLink" id="cancelCommitmentSubmit<?= commitment[0] ?>" value="Cancel this commitment">
+                                        </form>
+                                    </li>
+                                    <? } ?>
+                                    <li>
+                                        <a href="<?= baseAppUrl ?>?page=student-move-request&pairid=<?= commitment[0] ?>"><?= getMoveJargon(commitment[16]) ?></a>
+                                    </li>
+                                </ul>
+                                <? if (commitment[18] != false) { ?>
+                                <br />
+                                <br />
+                                <p>Notes: <?= commitment[18] ?> </p>
+                                <? } ?>
+                            </td>
+                        </tr>
+
+                        <? }); ?>
+                    </table>
+
+                    <?
+              } } } } }
+              ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

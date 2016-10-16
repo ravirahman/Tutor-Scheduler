@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+        body li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12 text-center">
+                    <h1><?= groupName ?></h1>
+                    <h3>Connecting Students with Tutors</h3>
+                    <h5>Designed by <a href="http://www.ravirahman.com" target="_BLANK">Ravi Rahman</a></h5>
+                </div>
+            </div>
+            <p class="text-center"><em>Welcome <?= getFirstName() ?> <?= getLastName() ?></em></p>
+            <? if (!isLoggedIn()) {?>
+            <h2 style="color: <?= accentColor ?>;">NOTE: Please <a href="<?= signInLink ?>">sign in</a> with your <?= orgAccountName ?> account to use the functionality of this app. Feel free to look around without signing in.</h2>
+            <? } ?>
+            <div class="row">
+                <div class="col-sm-4">
+                    <h2 class="text-center">I'm a Student</h2>
+                    <ul>
+                        <li><a href="<?= baseAppUrl ?>?page=student-new-request">Request a new tutoring appointment</a></li>
+                        <li><a href="<?= baseAppUrl ?>?page=student-existing-meetings">Manage your tutoring meetings</a></li>
+                        <li>Submit tutor feedback (coming soon!)</li>
+                    </ul>
+                </div>
+                <div class="col-sm-4">
+                    <h2 class="text-center">I'm a Tutor</h2>
+                    <ul>
+                        <li><a href="<?= baseAppUrl ?>?page=tutor-update-schedule">Update your tutoring availability</a></li>
+                        <li><a href="<?= baseAppUrl ?>?page=tutor-existing-meetings">Manage existing tutoring meetings</a></li>
+                        <li><a href="<?= baseAppUrl ?>?page=tutor-request-approval">Request approval for tutoring in new subject</a></li>
+                        <li>Submit student feedback (coming soon!)</li>
+                    </ul>
+                </div>
+                <div class="col-sm-4">
+                    <h2 class="text-center">I'm a Teacher</h2>
+                    <ul>
+                        <li>See your students' tutoring meetings (coming soon!)</li>
+                        <li>Approve a tutor's request for certification in a subject (coming soon!)</li>
+                        <!--<li><a href="?page=tutor-existing-appointment">Manage existing tutoring appointments</a></li> -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

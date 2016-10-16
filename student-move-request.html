@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+    </style>
+
+    <script>
+        function processForm() {
+            //first things first: validate responses
+
+
+            //duration: should have a value
+            var duration = document.getElementById("duration");
+            var durationValue = duration.options[duration.selectedIndex].value;
+            if (durationValue == "false") {
+                alert("Please select how long you would like a tutor.");
+                return false;
+            }
+
+            //cell-phone
+            document.getElementById("cell-phone").value = document.getElementById("cell-phone").value.split("-").join(".").split(") ").join(".").split(")").join(".").split("(").join("").split(" ").join(".");
+            var cellPhone = document.getElementById("cell-phone").value;
+            if (!/^((([0-9]{3}))|([0-9]{3}))[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4}$/.test(cellPhone)) {
+                alert("Please enter your cell phone number.");
+                return false;
+            }
+
+            //description: should have a value
+            var description = document.getElementById("description").value;
+            if (description == false || description == "") {
+                alert("Please enter a short description.");
+                return false;
+            }
+
+
+            var saveSchedulesButton = document.getElementById("submit-request");
+            var ssbv = saveSchedulesButton.value;
+            saveSchedulesButton.value = "Please Wait...";
+            saveSchedulesButton.disabled = true;
+            google.script.run.withFailureHandler(function(response){
+                alert(JSON.stringify(response));
+            }).withSuccessHandler(function(response) {
+                if (!response.success) {
+                    console.log(JSON.stringify(response));
+                    saveSchedulesButton.value = ssbv;
+                    saveSchedulesButton.disabled = false;
+                    return alert(response.message);
+                }
+                alert("Your request has been submitted. Thank you!");
+                saveSchedulesButton.value = "Request Submitted";
+                document.getElementById("homeLinkFooter").style.display = "block";
+            }).studentMoveRequest(document.getElementById("requestTutorForm"));
+            return false;
+        }
+
+        function durationChanged() {
+            var e = document.getElementById("duration");
+            var newDuration = e.options[e.selectedIndex].value;
+            var allRows = document.getElementsByClassName("period-row");
+            if (newDuration == "year") {
+                for (var i = 0; i < allRows.length; i++) {
+                    allRows[i].className = allRows[i].className.replace(/\bhidden\b/,'');
+                }
+                return;
+            }
+            //unhide all rows, and then hide them (don't want the hidden class twice)
+            for (i = 0; i < allRows.length; i++) {
+                allRows[i].className = allRows[i].className.replace(/\bhidden\b/,'');
+                allRows[i].className = allRows[i].className + " hidden";
+            }
+
+            //unhide the rows that have the correct duration class
+            for (i = 0; i < allRows.length; i++) {
+                if (allRows[i].className.indexOf(newDuration) !== -1) {
+                    allRows[i].className = allRows[i].className.replace(/\bhidden\b/,'');
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12">
+                    <h1>Move a tutoring appointment</h1>
+                    <a href="<?= baseAppUrl ?>?page=home">Back to home</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-12">
+                    <?
+                if (!isLoggedIn()) { ?>
+                    <p>Please <a href="<?= signInLink ?>">sign in</a> using your <?= orgAccountName ?> account to view this page.</p>
+                    <?
+                } else {
+                  //let's get the info
+                  var pairingId = parseInt(params.pairid);
+                  var studentEmail = email;
+                  var tutorSheet = SpreadsheetApp.openById(sheetId);
+                  var pairingAssignments = tutorSheet.getSheetByName("PairingAssignments");
+                  var range = pairingAssignments.getDataRange();
+                  var rangeArray = range.getValues();
+                  rangeArray.shift();
+                  var foundRow = false;
+                  for (var i = 0; i < rangeArray.length; i++) {
+                    var row = rangeArray[i];
+                    if (row[2] == studentEmail && row[0] == pairingId) {
+                    foundRow = true;
+                      break;
+                    }
+                  }
+                  if (foundRow == false) { ?>
+                    <p>The pairingId is invalid.</p>
+                    <?
+                    } else { ?>
+                    <p>
+                        Hi <?= getFirstName() ?> <?= getLastName() ?>,<br />
+                        <br />
+                        Use the form below to <?= getMoveJargon(row[16]) ?> for <?= row[7] ?> tutoring.<br />
+                    </p>
+                    <form id="requestTutorForm" onsubmit="return processForm();">
+                        <h2>1) Some Basic Stuff</h2>
+
+                        <label>Course</label>: <?= row[7] ?><br />
+                        <label>Teacher</label>: <?= getFirstName(row[8]) ?> <?= getLastName(row[8]) ?><br />
+                        <? if (row[13] != false) { //has an email ?>
+                        <label>Tutor</label>: <?= getFirstName(row[13]) ?> <?= getLastName(row[13]) ?><br />
+                        <? } ?>
+
+                        <label for="cell-phone">Cell Phone</label>: <input type="text" name="cell-phone" id="cell-phone" placeholder="Your Cell Phone Number" size="30" value="<?= row[3] ?>" /><br />
+                        <br />
+                        <label for="description">Description</label>: <textarea name="description" id="description"><?= row[11] ?></textarea>
+                        <br />
+
+                        <h2>2) Duration</h2>
+                        <?
+                    var selectedDuration = "none";
+                    if (row[10] == currentSeason) {
+                    selectedDuration = "season";
+                    }
+                    if (row[10] == currentSemester) {
+                    selectedDuration = "semester";
+                    }
+                    
+                    
+                    
+                    ?>
+                        <select name="duration" id="duration" onchange="durationChanged();" title="Duration">
+                            <option disabled="disabled" value="false" <? if (selectedDuration=="none") { ?> selected="selected" <? } ?>>How long do you want a tutor?</option>
+                            <option value="season" <? if (selectedDuration=="season") { ?> selected="selected" <? } ?>>This season: <?= getDurationName(currentSeason) ?> (afterschool time slots only)</option>
+                            <option value="semester" <? if (selectedDuration=="semester") { ?> selected="selected" <? } ?>>This semester: <?= getDurationName(currentSemester) ?> (academic day / study hall time slots only)</option>
+                        </select>
+
+                        <br />
+
+                        <h2>3) Scheduling</h2>
+                        Great! When are you free for a one-on-one session? <br />
+                        <div style="padding: 10px; margin: 10px 5px; background-color: rgba(255,255,255,0.8); color: black; max-width: 88vw;">
+                            Key for drop downs in table below:<br />
+                            <ul style="list-style: disc; padding-left: 20px;">
+                                <li style="list-style: disc; color: black; display: list-item;">[X]: I'm not available for tutoring during this time slot</li>
+                                <li style="list-style: disc; color: black; display: list-item;">SCHL: On Campus (location: Cox Library, 3rd floor, unless otherwise agreed upon with your tutor)</li>
+                                <li style="list-style: disc; color: black; display: list-item;">VIRT: Virtually Off Campus (e.g. Skype. Method to be agreed upon with your tutor)</li>
+                            </ul>
+
+                        </div>
+                        <table>
+                            <tr><th>Time</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr>
+                            <?
+                            var periods = timeOfPeriods;
+                            var i = 0;
+                            var previousSelected = JSON.parse(row[9]);
+                            
+                            for (var periodId in periods) {
+                                if (periods.hasOwnProperty(periodId)) {
+                                    var period = periods[periodId]; ?>
+                            <tr class="period-row <?= period.schedule ?>" style="<? if (i % 2 == 1) { ?> background-color: #404040;<? } ?>">
+                                <td class="left-column"><?= period.name ?></td>
+                                <?
+                                        var days = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
+                                        days.forEach(function(day){ 
+                                        var selectedTime = "none";
+                                        if (selectedDuration != "none") {
+                                         if(previousSelected.hasOwnProperty(day + periodId)) {
+                                         selectedTime = previousSelected[day + periodId];
+                                         }
+                                        }
+                                        
+                                        ?>
+                                <td>
+                                    <select name="times.<?= day + periodId ?>" style="background-color: #e0e0e0; text-align: center;" title="Location">
+                                        <option value="false" <? if (selectedTime == "none") { ?> selected="selected" <? } ?>>[X]</option>
+                                        <option value="onCampus" <? if (selectedTime == "onCampus") { ?> selected="selected" <? } ?>>SCHL</option>
+                                        <option value="offCampus" <? if (selectedTime == "offCampus") { ?> selected="selected" <? } ?>>VIRT</option>
+                                    </select>
+                                </td><?
+                                        }); ?>
+                            </tr><?
+                                    i++;
+                                }
+                            } ?>
+                        </table>
+                        <script>
+                            durationChanged();
+                        </script>
+                        <?
+                    if (row[13] != false) { ?>
+                        <br />
+                        <h2>4) One more question</h2>
+                        <label for="keepTutor">Want the same tutor?</label><br />
+                        <select name="keepTutor" id="keepTutor">
+                            <option value="true" selected="selected">Yes, please! I love <?= getFirstName(row[13]) ?></option>
+                            <option value="na">Anyone works!</option>
+                            <option value="false">I want someone else.</option>
+                        </select><br />
+                        <? } else { ?>
+                        <input type="hidden" name="keepTutor" value="na">
+                        <? 
+                        }
+                        ?>
+                        <input type="hidden" name="pairId" value="<?= row[0] ?>">
+                        <input type="hidden" name="userEmail" value="<?= email ?>">
+                        <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+
+                        <br />
+                        <input type="submit" value="<?= getMoveJargon(row[16]) ?>" id="submit-request" />
+                        <a href="<?= baseAppUrl ?>?page=home" id="homeLinkFooter" style="display: none;">Back to home</a>
+                    </form>
+                    <? }}  ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

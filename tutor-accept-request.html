@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+        .schedule {
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: 0.5 0.5;
+        }
+        .schedule-table {
+            width: 100%;
+        }
+        b {
+            color: <?= accentColor ?>;
+        }
+    </style>
+
+    <script>
+
+        function processForm() {
+            //first things first: validate responses
+            //times: should have a value
+            var times = document.getElementById("times");
+            var timesValue = times.options[times.selectedIndex].value;
+            if (timesValue == "false") {
+                alert("Please select a time.");
+                return false;
+            }
+
+            var submit = document.getElementById("submit");
+            submit.value = "Please Wait...";
+            submit.disabled = true;
+            google.script.run.withFailureHandler(function(response){
+                console.log(response);
+                alert("There was an error. Please try again.");
+            }).withSuccessHandler(function(response) {
+                if (!response.success) {
+
+                    submit.value = "Confirm Commitment";
+                    submit.disabled = false;
+                    return alert(response.message);
+                }
+                alert("Commitment Confirmed. Thank you!");
+                submit.style.display = "none";
+                document.getElementById("homeLinkFooter").style.display = "block";
+            }).tutorAcceptRequest(document.getElementById("form"));
+            return false;
+        }
+    </script>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12">
+                    <h1>Accept a Tutoring Request</h1>
+                    <a href="<?= baseAppUrl ?>?page=home" id="homeLink">Back to home</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-12">
+                    <? if (!isLoggedIn()) { ?>
+                    <p>Please <a href="<?= signInLink ?>">sign in</a> using your <?= orgAccountName ?> account to view this page.</p>
+                    <? }
+           else {
+          ?>
+
+                    <p>
+                        Hi <?= getFirstName() ?> <?= getLastName() ?>,</p>
+                    <p>Thank you for agreeing to accept this tutoring commitment.</p>
+                    <?
+              var pairingId = parseInt(params.pairid);
+              var tutorEmail = Session.getActiveUser().getEmail();
+              var tutorSheet = SpreadsheetApp.openById(sheetId);
+              var pairingAssignments = tutorSheet.getSheetByName("PairingAssignments");
+              var range = pairingAssignments.getDataRange();
+              var rangeArray = range.getValues();
+              rangeArray.shift();
+              var courseName;
+              var duration;
+              var description;
+              var validId = false;
+              var foundAtutor = false;
+              var times;
+              var tutorWasContacted = false;
+              for (var i = 0; i < rangeArray.length; i++) {
+                var row = rangeArray[i];
+                if (row[0] == pairingId) {
+                                  validId = true;
+                  if ((row[13] != false && row[13] != "") || row[16] === false) {
+                    foundAtutor = true;
+                    break;
+                  }
+                
+                  duration = row[10];
+                  courseName = row[7];
+                  description = row[11];
+
+                  //we need to parse through row 12 to determine whether or not
+                  var tutorsContacted = (function(){ try { return JSON.parse(row[12]) } catch(e) { return {} }})();
+                  for (var j = 0; j < tutorsContacted.length; j++) {
+                    var tc = tutorsContacted[j];
+                    if (tc.tutorEmail == tutorEmail) {
+                      times = tc.sortedPeriods;
+                      tutorWasContacted = true;
+                      break;
+                    }
+                  }
+                  break;
+                }
+              }
+              if (foundAtutor) {
+                ?>
+                    <p>However, another tutor has already accept this commitment. Thanks anyways!</p>
+                    <?
+              }
+              else if (!validId) { ?>
+                    <p>However, the pairid is invalid. Sorry!</p>
+                    <?
+              }
+              else if (!tutorWasContacted) { ?>
+                    <p>However, you are not available and qualified to accept this commitment. Sorry!</p>
+                    <?
+              }
+              else {
+                
+                var durationName = (function(){
+                  switch(duration) {
+                    case "FULL":
+                    return "Whole School Uear";
+                    break;
+                    case "SEM1":
+                    return "First Semester";
+                    break;
+                    case "SEM2":
+                    return "Second Semester";
+                    break;
+                    case "FALL":
+                    case "WINTER":
+                    case "SPRING":
+                    return duration.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();}) + " Season";
+                    break;
+                  }
+                })();
+                
+                //in the email, we will use the ___Names array
+                var days = [];
+                var periods = [];
+                var daynames = [];
+                var periodNames = [];
+                var locations = [];
+                var locationNames = [];
+                
+                for (var i = 0; i < times.length; i++) {
+                  var periodInfo = times[i];
+                  if (periodInfo.wait >= 3 && i > 3) { //at this point, give it to another tutor (if wait would be 3+ days and we alredy offered 3 times). Times is already sorted from shortest wait to greatest wait.
+                    break;
+                    }
+                    var time = periodInfo.period;
+                    var day = time.substring(0,3);
+                    days.push(day);
+                    daynames.push((function(){
+                    switch(day) {
+                    case "MON":
+                    return "Monday";
+                    break;
+                    case "TUE":
+                    return "Tuesday";
+                    break;
+                    case "WED":
+                    return "Wednesday";
+                    break;
+                    case "THU":
+                    return "Thursday";
+                    break;
+                    case "FRI":
+                    return "Friday";
+                    break;
+                    case "SAT":
+                    return "Saturday";
+                    break;
+                    case "SUN":
+                    return "Sunday";
+                    break;
+                    }
+                    })());
+                    var period = time.substring(3,5);
+                    periods.push(period);
+                    var periodName = timeOfPeriods[period].name;
+
+
+                    if (period == "p1") {
+                    periodName = "Period 1: 8:20AM - 9:10AM";
+                    if (day == "WED")
+                    periodName = "Period 1: 8:05AM - 8:50AM";
+                    }
+                    if (period == "p2") {
+                    periodName = "Period 2: 9:15AM - 10:00AM";
+                    if (day == "WED")
+                    periodName = "Period 2: 8:55AM - 9:40AM";
+                    }
+                    periodNames.push(periodName);
+
+                    var location = periodInfo.location;
+                    var locationName;
+                    if (location == "onCampus") {
+                    locationName = "On Campus";
+                    }
+                    else {
+                    locationName = "Virtually Off Campus";
+                    }
+                    locations.push(location);
+                    locationNames.push(locationName);
+
+                    }; ?>
+
+                    <p>Just to confirm, this student would like a tutor for the <b><?= durationName.toLowerCase(); ?></b> in <b><?= courseName ?></b>.</p>
+                    <p><b>Description</b>:<br />
+                        <?= description ?>
+                    </p>
+                    <form id="form" onsubmit="return processForm();">
+                        <p>Please select when you would like to meet (sooner is better):<br />
+
+                            <input type="hidden" name="pairid" value="<?= pairingId ?>" />
+                            <select name="times" id="times">
+                                <option selected="selected" value="false">Please select a time</option>
+                                <?
+                  for (var i = 0; i < days.length; i++) { ?>
+
+                                <option value="<?= times[i].period ?>"><?= daynames[i] ?>, <?= periodNames[i] ?>, <?=locationNames[i]?></option>
+                                <?
+                  }
+                  
+                  ?>
+                            </select>
+                        </p>
+
+                        <input type="hidden" name="userEmail" value="<?= email ?>">
+                        <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+                        <p><input type="submit" value="Confirm Commitment" id="submit" /><a href="<?= baseAppUrl ?>?page=home" id="homeLinkFooter" style="display: none;">Back to home</a></p>
+                    </form>
+                    <?
+              }
+              }
+              ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

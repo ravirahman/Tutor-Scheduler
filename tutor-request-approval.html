@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+    </style>
+
+    <script>
+        function processForm() {
+            //first things first: validate responses
+
+            //course: should have a value
+            var course = document.getElementById("course");
+            console.log(course);
+            var courseValue = course.options[course.selectedIndex].value;
+            console.log(courseValue);
+            if (courseValue == "false") {
+                alert("Please select a course.");
+                return false;
+            }
+
+            //teacher-email: should be an email
+            var teacherEmail = document.getElementById("teacher-email").value;
+            if (! /^(([^<>()[\]\.,;:\s@\"]+(\.[^<>()[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()[\]\.,;:\s@\"]+\.)+[^<>()[\]\.,;:\s@\"]{2,})$/i.test(teacherEmail) || teacherEmail.substr(teacherEmail.length - 11) != "@<?= domain ?>") {
+                alert("Please enter your teacher's <?= orgName ?> email address");
+                return false;
+            }
+
+            var saveSchedulesButton = document.getElementById("submit-request");
+            saveSchedulesButton.value = "Please Wait...";
+            saveSchedulesButton.disabled = true;
+            google.script.run.withFailureHandler(function(response){
+                alert(JSON.stringify(response));
+            }).withSuccessHandler(function(response) {
+                if (!response.success) {
+                    saveSchedulesButton.value = "Submit Request";
+                    saveSchedulesButton.disabled = false;
+                    return alert(response.message);
+                }
+                alert("Your request has been submitted. We will let you have been approved. Thank you!");
+                saveSchedulesButton.value = "Submit Another Request";
+                saveSchedulesButton.disabled = false;
+                document.getElementById("homeLinkFooter").style.display = "block";
+            }).tutorRequestApproval(document.getElementById("requestTutorForm"));
+            console.log("returning false");
+            return false;
+        }
+    </script>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12">
+                    <h1>Request approval in a subject</h1>
+                    <a href="<?= baseAppUrl ?>?page=home">Back to home</a>
+                </div>
+            </div>
+            <div class="row">
+
+                <div class="col-sm-12">
+                    <? if (!isLoggedIn()) { ?>
+                    <p>Please <a href="<?= signInLink ?>">sign in</a> using your <?= orgAccountName ?> account to view this page.</p>
+                    <? }
+           else {
+          ?>
+                    <p>
+                        Hi <?= getFirstName() ?> <?= getLastName() ?>,</p>
+                    <?
+              
+                    //first we need to load the tutor's schedule
+                    var tutorSheet = SpreadsheetApp.openById(sheetId);
+                        var tutorList = tutorSheet.getSheetByName("TutorList");
+                        var range = tutorList.getDataRange();
+                        var rangeValues = range.getValues();
+                    var slots;/* slots is (Will be) an object formatted like so
+                        {
+                            fall: ["MON1" : "onCampus","TUEA": " offCampus", ...], //usually a false value would not be in the list
+                            winter: [...],
+                            ...
+                        }
+                    
+                    
+                    */
+                    var phone;
+                    var foundtutor = false;
+                    for (var i = 1; i < rangeValues.length; i++) {
+                        var row = rangeValues[i];
+                        //row[0] = email; row[1] = phone; row[2] = json of available slots; row[3] = json of occupied slots
+                        if (row[0] == email) {
+                            try {
+                                slots = JSON.parse(row[2]);
+                            }
+                            catch (e) {
+                                slots = {};
+                            }
+                            if (typeof slots !== "object") {
+                                slots = {};
+                            }
+                            phone = row[1];
+                            foundtutor = true;
+                            break;
+                        }
+                    };
+                    if (foundtutor == false) { ?>
+                    <p>Unfortunately, our records indicate that you aren't yet a tutor. Sorry!</p>
+                    <?
+                    }
+                    else { ?>
+                    <p>
+                        Use the form below to request approval as a tutor in a subject.
+                    </p>
+                    <form id="requestTutorForm" onsubmit="return processForm();">
+                        <?
+                        var tutorSheet = SpreadsheetApp.openById(sheetId);
+                        var subjectClassList = tutorSheet.getSheetByName("SubjectClassList");
+                        var range = subjectClassList.getDataRange();
+                        var rangeValues = range.getValues();
+                        var courseInfo = {
+                            /*
+                            subject: {
+                                class: [{
+                                    name: "Name",
+                                    level: level,
+                                    subject: "subject" //the subject of the category from which the student selected from 
+                                    class: "class"
+                                },  ...]
+                                , ...}Ø
+                                ,...
+                            */
+                        };
+                        rangeValues.shift();//remove the first title row
+                        rangeValues.forEach(function(row) {
+                            //row[0] is subject1 (Science), row[1] is class name (Biology), row[2] is (1.1), row[3] is course name (Biology (Honors))
+
+                            if (!courseInfo.hasOwnProperty(row[0])) { //create arrays if they don't exist
+                            courseInfo[row[0]] = {};
+                            }
+                            if (!courseInfo[row[0]].hasOwnProperty(row[1])) {
+                            courseInfo[row[0]][row[1]] = [];
+                            }
+
+                            
+                            
+                                var class = courseInfo[row[0]][row[1]];
+                                var course = {};
+                                course.name = row[3] || row[1];
+                                course.level = row[2] || 1;
+                                course.subjects = [row[0]];
+                                course.class = row[1];
+                                class.push(course);
+                            
+                        });
+                        //courseInfo is now populated.
+                        var subjects = Object.keys(courseInfo);
+                        subjects.sort(); //sort by itself is alphabetical
+                        ?>
+
+                        <h2>1) Course</h2>
+                        <br />
+                        <p><b>Note: approval in a higher-level course (e.g. Advanced Biology) will auto-approve you for all lower levels of the subject (e.g. Biology and Honors Biology).<br />
+                            So, for each subject, request approval ONLY for the highest level which you completed and want to tutor. Otherwise, your teachers will be inundated with emails. Thanks!</b></p>
+                        <select name="course" id="course" title="Course">
+                            <option selected="selected" disabled="disabled" value="false">Select the Course</option>
+                            <?
+                            subjects.forEach(function(subject) { ?>
+                            <optgroup label="<?= subject ?>">
+                                <?
+                                var classesObj = courseInfo[subject]; //all classes -> levels -> courses in a subject
+                                var courses = [];
+                                for (var key in classesObj) {
+                                if (classesObj.hasOwnProperty(key)) {
+                                var classCourses = classesObj[key]; //an array of objects of all courses (levels) in a class
+                                classCourses.forEach(function(classCourse){
+                                classCourse.subjects = undefined;
+                                classCourse.subject = subject;
+                                });
+                                classCourses = classCourses.sort(function(a, b){ //we want to sort the courses within a class by the level
+                                var x = a["level"]; var y = b["level"];
+                                return ((x < y) ? -1 : ((x > y) ? 1 : 0));
+                                });
+                                courses = courses.concat(classCourses);
+                                }
+                                }
+                                courses.forEach(function(course) { ?>
+                                <option value="<?= JSON.stringify(course); ?>"><?= course.name ?></option><?
+                            }); ?>
+                            </optgroup>
+                            <?
+                        }); ?>
+                        </select>
+                        <br />
+
+                        <h2>2) Teacher</h2>
+                        <input type="email" name="teacher-email" id="teacher-email" placeholder="Enter your Teacher's Email" size="30" />
+
+
+                        <input type="hidden" name="userEmail" value="<?= email ?>">
+                        <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+
+                        <h2>3) Submit</h2>
+                        <input type="submit" value="Request Approval" id="submit-request" />
+                        <a href="<?= baseAppUrl ?>?page=home" id="homeLinkFooter" style="display: none;">Back to home</a>
+                        <br />
+
+                        <br />
+
+                        <p>4) Repeat for each course.</p>
+                    </form>
+                    <?
+                    }
+                    } ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

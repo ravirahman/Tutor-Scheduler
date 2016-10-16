@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+    </style>
+
+    <script>
+        function processForm() {
+            //first things first: validate responses
+
+            //course: should have a value
+            var course = document.getElementById("course");
+            console.log(course);
+            var courseValue = course.options[course.selectedIndex].value;
+            console.log(courseValue);
+            if (courseValue == "false") {
+                alert("Please select a course.");
+                return false;
+            }
+
+            //teacher-email: should be an email
+            var teacherEmail = document.getElementById("teacher-email").value;
+            if (! /^(([^<>()[\]\.,;:\s@\"]+(\.[^<>()[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()[\]\.,;:\s@\"]+\.)+[^<>()[\]\.,;:\s@\"]{2,})$/i.test(teacherEmail) || teacherEmail.substr(teacherEmail.length - 11) != "@<?= domain ?>") {
+                alert("Please enter your teacher's <?= orgName ?> email address");
+                return false;
+            }
+
+
+            //duration: should have a value
+            var duration = document.getElementById("duration");
+            var durationValue = duration.options[duration.selectedIndex].value;
+            if (durationValue == "false") {
+                alert("Please select how long you would like a tutor.");
+                return false;
+            }
+
+            //cell-phone
+            document.getElementById("cell-phone").value = document.getElementById("cell-phone").value.split("-").join(".").split(") ").join(".").split(")").join(".").split("(").join("").split(" ").join(".");
+            var cellPhone = document.getElementById("cell-phone").value;
+            if (!/^((([0-9]{3}))|([0-9]{3}))[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4}$/.test(cellPhone)) {
+                alert("Please enter your cell phone number.");
+                return false;
+            }
+
+            //description: should have a value
+            var description = document.getElementById("description").value;
+            if (description == false || description == "") {
+                alert("Please enter a short description.");
+                return false;
+            }
+
+
+            var saveSchedulesButton = document.getElementById("submit-request");
+            saveSchedulesButton.value = "Please Wait...";
+            saveSchedulesButton.disabled = true;
+            google.script.run.withFailureHandler(function(response){
+                alert(JSON.stringify(response));
+            }).withSuccessHandler(function(response) {
+                if (!response.success) {
+                    saveSchedulesButton.value = "Submit Request";
+                    saveSchedulesButton.disabled = false;
+                    return alert(response.message);
+                }
+                alert("Your request has been submitted. We will let you know when we paired you with a tutor. Thank you!");
+                saveSchedulesButton.value = "Request Submitted";
+                document.getElementById("homeLinkFooter").style.display = "block";
+            }).processStudentRequest(document.getElementById("requestTutorForm"));
+            console.log("returning false");
+            return false;
+        }
+
+        function durationChanged() {
+            var e = document.getElementById("duration");
+            var newDuration = e.options[e.selectedIndex].value;
+            var allRows = document.getElementsByClassName("period-row");
+            if (newDuration == "year") {
+                for (var i = 0; i < allRows.length; i++) {
+                    allRows[i].className = allRows[i].className.replace(/\bhidden\b/,'');
+                }
+                return;
+            }
+            //unhide all rows, and then hide them (don't want the hidden class twice)
+            for (i = 0; i < allRows.length; i++) {
+                allRows[i].className = allRows[i].className.replace(/\bhidden\b/,'');
+                allRows[i].className = allRows[i].className + " hidden";
+            }
+
+            //unhide the rows that have the correct duration class
+            for (i = 0; i < allRows.length; i++) {
+                if (allRows[i].className.indexOf(newDuration) !== -1) {
+                    allRows[i].className = allRows[i].className.replace(/\bhidden\b/,'');
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12">
+                    <h1>Request a new tutoring appointment</h1>
+                    <a href="<?= baseAppUrl ?>?page=home">Back to home</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-12">
+                    <p>
+                        Hi <?= getFirstName() ?> <?= getLastName() ?>,<br />
+                        <br />
+                        Use the form below to request a weekly one-on-one tutoring session.<br />
+                        We'll do some magic ... to pair you with a tutor.
+                    </p>
+                    <form id="requestTutorForm" onsubmit="return processForm();">
+                        <?
+                        var tutorSheet = SpreadsheetApp.openById(sheetId);
+                        var subjectClassList = tutorSheet.getSheetByName("SubjectClassList");
+                        var range = subjectClassList.getDataRange();
+                        var rangeValues = range.getValues();
+                        var courseInfo = {
+                            /*
+                            subject: {
+                                class: [{
+                                    name: "Name",
+                                    level: level,
+                                    subject: "subject" //the subject of the category from which the student selected from 
+                                    class: "class"
+                                },  ...]
+                                , ...}Ø
+                                ,...
+                            */
+                        };
+                        rangeValues.shift();//remove the first title row
+                        rangeValues.forEach(function(row) {
+                            //row[0] is subject1 (Science), row[1] is class name (Biology), row[2] is (1.1), row[3] is course name (Biology (Honors))
+
+                            if (!courseInfo.hasOwnProperty(row[0])) { //create arrays if they don't exist
+                            courseInfo[row[0]] = {};
+                            }
+                            if (!courseInfo[row[0]].hasOwnProperty(row[1])) {
+                            courseInfo[row[0]][row[1]] = [];
+                            }
+
+                            
+                            
+                                var class = courseInfo[row[0]][row[1]];
+                                var course = {};
+                                course.name = row[3] || row[1];
+                                course.level = row[2] || 1;
+                                course.subjects = [row[0]];
+                                course.class = row[1];
+                                class.push(course);
+                            
+                        });
+                        //courseInfo is now populated.
+                        var subjects = Object.keys(courseInfo);
+                        subjects.sort(); //sort by itself is alphabetical
+                        ?>
+
+                        <h2>1) Course</h2>
+                        <br />
+                        <select name="course" id="course" title="Course">
+                            <option selected="selected" disabled="disabled" value="false">Select the Course</option>
+                            <?
+                            subjects.forEach(function(subject) { ?>
+                            <optgroup label="<?= subject ?>">
+                                <?
+                                var classesObj = courseInfo[subject]; //all classes -> levels -> courses in a subject
+                                var courses = [];
+                                for (var key in classesObj) {
+                                if (classesObj.hasOwnProperty(key)) {
+                                var classCourses = classesObj[key]; //an array of objects of all courses (levels) in a class
+                                classCourses.forEach(function(classCourse){
+                                classCourse.subjects = undefined;
+                                classCourse.subject = subject;
+                                });
+                                classCourses = classCourses.sort(function(a, b){ //we want to sort the courses within a class by the level
+                                var x = a["level"]; var y = b["level"];
+                                return ((x < y) ? -1 : ((x > y) ? 1 : 0));
+                                });
+                                courses = courses.concat(classCourses);
+                                }
+                                }
+                                courses.forEach(function(course) { ?>
+                                <option value="<?= JSON.stringify(course); ?>"><?= course.name ?></option><?
+                            }); ?>
+                            </optgroup>
+                            <?
+                        }); ?>
+                        </select>
+                        <br />
+
+                        <h2>2) Teacher</h2>
+                        <input type="email" name="teacher-email" id="teacher-email" placeholder="Enter your Teacher's Email" size="30" />
+
+                        <h2>3) Duration</h2>
+                        <select name="duration" id="duration" onchange="durationChanged();" title="Duration">
+                            <option selected="selected" disabled="disabled" value="false">How long do you want a tutor?</option>
+                            <option value="season">This season: <?= getDurationName(currentSeason) ?> (afterschool time slots only)</option>
+                            <option value="semester">This semester: <?= getDurationName(currentSemester) ?> (academic day / study hall time slots only)</option>
+                        </select>
+                        <br />
+
+                        <h2>4) Scheduling</h2>
+                        Great! When are you free for a one-on-one session? <br />
+                        <div style="padding: 10px; margin: 10px 5px; background-color: rgba(255,255,255,0.8); color: black; max-width: 88vw;">
+                            Key for drop downs in table below:<br />
+                            <ul style="list-style: disc; padding-left: 20px;">
+                                <li style="list-style: disc; color: black; display: list-item;">[X]: I'm not available for tutoring during this time slot</li>
+                                <li style="list-style: disc; color: black; display: list-item;">SCHL: On Campus (location: Cox Library, 3rd floor, unless otherwise agreed upon with your tutor)</li>
+                                <li style="list-style: disc; color: black; display: list-item;">VIRT: Virtually Off Campus (e.g. Skype. Method to be agreed upon with your tutor)</li>
+                            </ul>
+                        </div>
+                        <table>
+                            <tr><th>Time</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr>
+                            <?
+                            var periods = timeOfPeriods;
+                            var i = 0;
+                            for (var periodId in periods) {
+                                if (periods.hasOwnProperty(periodId)) {
+                                    var period = periods[periodId]; ?>
+                            <tr class="period-row <?= period.schedule ?>" style="<? if (i % 2 == 1) { ?> background-color: #404040;<? } ?>">
+                                <td class="left-column"><?= period.name ?></td>
+                                <?
+                                        var days = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
+                                        days.forEach(function(day){ ?>
+                                <td>
+                                    <select name="times.<?= day + periodId ?>" style="background-color: #e0e0e0; text-align: center;" title="Location">
+                                        <option value="false" selected="selected">[X]</option>
+                                        <option value="onCampus">SCHL</option>
+                                        <option value="offCampus">VIRT</option>
+                                    </select>
+                                </td><?
+                                        }); ?>
+                            </tr><?
+                                    i++;
+                                }
+                            } ?>
+                        </table>
+                        <br />
+
+                        <h2>5) Contact Info</h2>
+                        <label for="cell-phone">One last thing (sorry!)</label> <input type="text" name="cell-phone" id="cell-phone" placeholder="Your Cell Phone Number" size="30" /><br />
+                        <br />
+
+                        <h2>6) A short description of what you want a tutor to help with</h2>
+                        <textarea name="description" id="description"></textarea>
+
+
+                        <input type="hidden" name="userEmail" value="<?= email ?>">
+                        <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+
+                        <h2>7) Submit</h2>
+                        <input type="submit" value="Pair me up" id="submit-request" />
+                        <a href="<?= baseAppUrl ?>?page=home" id="homeLinkFooter" style="display: none;">Back to home</a>
+                        <br />
+
+                        <br />
+
+                        <p>8) There is no 8.</p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Latest compiled and minified CSS -->
+    <?!= include('bootstrap'); ?>
+    <?!= include('style'); ?>
+    <?
+    var monthNames = [
+        "January", "February", "March",
+        "April", "May", "June", "July",
+        "August", "September", "October",
+        "November", "December"
+    ];
+    
+    ?>
+    <style type="text/css">
+        body {
+            background-color: #000;
+            background-size: cover;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }
+        .schedule {
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: 0.5 0.5;
+        }
+        .schedule-table {
+            width: 100%;
+        }
+    </style>
+
+    <script>
+
+        function copySchedule(fromId, toId) {
+            var toCopy = document.getElementsByClassName("select-" + fromId);
+            for(var i = 0; i < toCopy.length; i++) {
+                var timeSlot = toCopy.item(i);
+                console.log(timeSlot);
+                var timeSlotId = timeSlot.id;
+                console.log(timeSlotId);
+                var selectedIndex = timeSlot.selectedIndex;
+                console.log("selectedIndex is " + selectedIndex);
+                var timeSlotIdParts = timeSlotId.split(".");
+
+                timeSlotIdParts[1] = toId; //this was previously fromId;
+                var newId = timeSlotIdParts.join(".");
+                console.log("newId is " + newId);
+                document.getElementById(newId).selectedIndex = selectedIndex;
+            }
+            return false;
+        }
+
+        function processForm() {
+            //first things first: validate responses
+
+            //cell-phone
+
+            document.getElementById("cell-phone").value = document.getElementById("cell-phone").value.split("-").join(".").split(") ").join(".").split(")").join(".").split("(").join("").split(" ").join(".");
+            var cellPhone = document.getElementById("cell-phone").value;
+            if (!/^((([0-9]{3}))|([0-9]{3}))[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4}$/.test(cellPhone)) {
+                alert("Please enter your cell phone number.");
+                return false;
+            }
+
+
+            var saveSchedulesButton = document.getElementById("save-schedules");
+            saveSchedulesButton.value = "Please Wait...";
+            saveSchedulesButton.disabled = true;
+            google.script.run.withFailureHandler(function(response){
+                console.log(response);
+                alert("There was an error. Please try again.");
+            }).withSuccessHandler(function(response) {
+                if (!response.success) {
+
+                    saveSchedulesButton.value = "Save Schedules";
+                    saveSchedulesButton.disabled = false;
+                    return alert(response.message);
+                }
+                alert("Schedules Updated. Thank you!");
+                saveSchedulesButton.value = "Save Schedules";
+                saveSchedulesButton.disabled = false;
+                document.getElementById("homeLinkFooter").style.display = "block";
+            }).tutorUpdateSchedule(document.getElementById("tutorUpdateScheduleForm"));
+            return false;
+        }
+    </script>
+</head>
+<body>
+<div class="page">
+    <div class="translucent-background">
+        <div class="container">
+            <div class="row" style="padding-bottom: 5vh;">
+                <div class="col-sm-12">
+                    <h1>Update your Tutoring Availability</h1>
+                    <a href="<?= baseAppUrl ?>?page=home" id="homeLink">Back to home</a>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-12">
+                    <? if (!isLoggedIn()) { ?>
+                    <p>Please <a href="<?= signInLink ?>">sign in</a> using your <?= orgAccountName ?> account to view this page.</p>
+                    <? }
+           else {
+          ?>
+                    <p>Hi <?= getFirstName() ?> <?= getLastName() ?>,</p>
+
+                    <?
+                    
+                    //first we need to load the tutor's schedule
+                    var tutorSheet = SpreadsheetApp.openById(sheetId);
+                        var tutorList = tutorSheet.getSheetByName("TutorList");
+                        var range = tutorList.getDataRange();
+                        var rangeValues = range.getValues();
+                    var slots;/* slots is (Will be) an object formatted like so
+                        {
+                            fall: ["MON1" : "onCampus","TUEA": " offCampus", ...], //usually a false value would not be in the list
+                            winter: [...],
+                            ...
+                        }
+                    
+                    
+                    */
+                    var phone;
+                    var foundtutor = false;
+                    for (var i = 1; i < rangeValues.length; i++) {
+                        var row = rangeValues[i];
+                        //row[0] = email; row[1] = phone; row[2] = json of available slots; row[3] = json of occupied slots
+                        if (row[0] == email) {
+                            try {
+                                slots = JSON.parse(row[2]);
+                            }
+                            catch (e) {
+                                slots = {};
+                            }
+                            if (typeof slots !== "object") {
+                                slots = {};
+                            }
+                            phone = row[1];
+                            foundtutor = true;
+                            break;
+                        }
+                    };
+                    if (foundtutor == false) { ?>
+                    <p>Unfortunately, our records indicate that you aren't yet a tutor. Sorry!</p>
+                    <?
+                    }
+                    else { ?>
+
+                    <p>We need to make sure we have your schedule, so we can pair you with students.<br />
+                        So, please, give us a minute to tell us the minutes you're free. <em>Thank you.</em>
+
+                    </p>
+                    <p><b>Note: marking yourself as unavailable during an existing tutoring appointment will NOT free you from that obligation</b></p>
+                    <form id="tutorUpdateScheduleForm" onSubmit="return processForm();">
+                        <?
+                    
+                    //second let's display the form
+                    var schedules = [{
+                        name: "First Semester",
+                        id: "SEM1",
+                        type: "semester"
+                    }, {
+                        name: "Second Semester",
+                        id: "SEM2",
+                        type: "semester"
+                    }, {
+                        name: "Fall Season",
+                        id: "FALL",
+                        type: "season"
+                    }, {
+                        name: "Winter Season",
+                        id: "WINTER",
+                        type: "season"
+                    }, {
+                        name: "Spring Season",
+                        id: "SPRING",
+                        type: "season"
+                    }];
+                    var periods = timeOfPeriods;
+                    var previous = {};
+                    for (var j = 0; j < schedules.length; j++) {
+                        var tutorSchedule = schedules[j]; ?>
+
+                        <div class="schedule">
+                            <?
+                        //if we're not on the first iteration of schedule.type, then show the copy from _(previous iteration of schedule.type)_
+                        if (previous.hasOwnProperty(tutorSchedule.type)) { ?>
+                            <button style="float: right; margin-top: 10px; margin-right: 10px;"
+                                    onClick="return copySchedule(<?= previous[tutorSchedule.type].id ?>,<?= tutorSchedule.id ?>)">
+                                Copy Schedule from <?= previous[tutorSchedule.type].name ?></button>
+                            <?
+                        } 
+                        previous[tutorSchedule.type] = tutorSchedule;
+                        ?>
+                            <h2 style="padding-top: 10px; padding-left: 5px;"><?= (j + 1) + ") " + tutorSchedule.name ?></h2>
+                            <? var start = getStartDate(tutorSchedule.id); var end = getEndDate(tutorSchedule.id); ?>
+                            <h5 style="padding-left: 5px;"><?= monthNames[start.getMonth()] + " " + start.getDate() + ", " + start.getFullYear(); ?> - <?= monthNames[end.getMonth()] + " " + end.getDate() + ", " + end.getFullYear(); ?></h5>
+                            <div style="padding: 10px; margin: 10px 0; background-color: rgba(255,255,255,0.8); color: black; max-width: 88vw;">
+                                Key for drop downs in table below:<br />
+                                <ul style="list-style: disc; padding-left: 20px;">
+                                    <li style="list-style: disc; color: black; display: list-item;">[X]: I'm not available to tutor during this time slot</li>
+                                    <li style="list-style: disc; color: black; display: list-item;">SCHL: On Campus (location: Cox Library, 3rd floor, unless otherwise agreed upon with your student)</li>
+                                    <li style="list-style: disc; color: black; display: list-item;">VIRT: Virtually Off Campus (e.g. Skype. Method to be agreed upon with your student)</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <table class="schedule-table">
+                            <tr><th>Time</th><th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th><th>Saturday</th><th>Sunday</th></tr>
+                            <?
+                            var i = 0;
+                            for (var periodId in periods) {
+                                if (periods.hasOwnProperty(periodId)) {
+                                    var period = periods[periodId]; 
+                                    if (period.schedule == tutorSchedule.type) {  ?>
+                            <tr class="period-row <?= period.schedule ?>" style="<? if (i % 2 == 1) { ?> background-color: rgba(63,63,63,0.8);<? } ?>">
+                                <td class="left-column"><?= period.name ?></td>
+                                <?
+                                            var days = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
+                                            days.forEach(function(day){
+                                                //figure out if this row was already marked as saved in the database
+                                                var savedTimeValue;
+                                                if (slots.hasOwnProperty(tutorSchedule.id) && slots[tutorSchedule.id].hasOwnProperty(day + periodId)) {
+                                                    savedTimeValue = slots[tutorSchedule.id][day + periodId];
+                                                }
+                                                if (savedTimeValue != "onCampus" && savedTimeValue != "offCampus") {
+                                                    savedTimeValue = "false";
+                                                }
+                                                ?>
+                                <td>
+                                    <select class="select-<?= tutorSchedule.id ?>" name="times.<?= tutorSchedule.id ?>.<?= day + periodId ?>" id="times.<?= tutorSchedule.id ?>.<?= day + periodId ?>" style="background-color: #e0e0e0; text-align: center;" title="Location">
+                                        <option value="false" <? if (savedTimeValue == "false") { ?> selected="selected" <? } ?>>[X]</option>
+                                        <option value="onCampus" <? if (savedTimeValue == "onCampus") { ?> selected="selected" <? } ?>>SCHL</option>
+                                        <option value="offCampus" <? if (savedTimeValue == "offCampus") { ?> selected="selected" <? } ?>>VIRT</option>
+                                    </select>
+                                </td><?
+                                            }); ?>
+                            </tr><?
+                                        i++;
+                                    }
+                                }
+                            } ?>
+                        </table>
+                        <br />
+                        <br />
+                        <br /><?
+                    } ?>
+                        <br />
+
+                        <h2><?= schedules.length + 1 ?>) Contact Info</h2>
+                        <label for="cell-phone">One last thing (sorry!)</label> <input type="text" name="cell-phone" id="cell-phone" placeholder="Your Cell Phone Number" size="30" value="<?= phone ?>" /><br />
+                        <br />
+
+
+                        <input type="hidden" name="userEmail" value="<?= email ?>">
+                        <input type="hidden" name="userHash" value="<?= generateHash_() ?>">
+
+                        <h2><?= schedules.length + 2 ?>) Submit</h2>
+                        <input type="submit" value="Save Schedules" id="save-schedules" />
+                        <a href="<?= baseAppUrl ?>?page=home" id="homeLinkFooter" style="display: none;">Back to home</a>
+                        <br />
+                        <br />
+
+                        <p><?= schedules.length + 3 ?>) There is no <?= schedules.length + 3 ?>.</p>
+                    </form>
+                    <? }
+                    }?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
